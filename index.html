@@ -1,0 +1,913 @@
+<!DOCTYPE html>
+<html lang="en" class="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CubeTick - Rubik's Cube Timer</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Segoe UI', 'Tahoma', 'Geneva', 'Verdana', 'sans-serif'],
+            mono: ['Courier New', 'Courier', 'monospace']
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    * {
+      box-sizing: border-box;
+      user-select: none;
+      -webkit-user-select: none;
+      border-radius: 0px !important; /* Strictly NO rounded corners */
+    }
+
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      margin: 0;
+      padding: 0;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow-x: hidden;
+      transition: background-color 0.12s ease, color 0.12s ease;
+    }
+
+    /* Light Theme (Default) */
+    html.light body {
+      background-color: #f4f4f6;
+      color: #1a1a1a;
+    }
+
+    /* Dark Theme */
+    html.dark body {
+      background-color: #12161f;
+      color: #e5e7eb;
+    }
+
+    /* Classic box shadow styling */
+    .classic-box {
+      border: 2px solid #1a1a1a;
+      box-shadow: 4px 4px 0px #1a1a1a;
+      background-color: #ffffff;
+    }
+    html.dark .classic-box {
+      border: 2px solid #4b5563;
+      box-shadow: 4px 4px 0px #000000;
+      background-color: #1e2430;
+    }
+
+    .classic-btn {
+      border: 2px solid #1a1a1a;
+      box-shadow: 2px 2px 0px #1a1a1a;
+      background: #e2e8f0;
+      color: #1a1a1a;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.08s ease;
+    }
+    .classic-btn:hover {
+      background: #cbd5e1;
+      filter: brightness(0.95);
+    }
+    .classic-btn:active {
+      transform: translate(2px, 2px);
+      box-shadow: 0px 0px 0px #1a1a1a;
+    }
+
+    html.dark .classic-btn {
+      border: 2px solid #6b7280;
+      box-shadow: 2px 2px 0px #000000;
+      background: #2d3748;
+      color: #f3f4f6;
+    }
+    html.dark .classic-btn:hover {
+      background: #3a475c;
+    }
+    html.dark .classic-btn:active {
+      box-shadow: 0px 0px 0px #000000;
+    }
+
+    /* Custom Overlay & Modal Box */
+    .confirm-overlay {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.4);
+      justify-content: center;
+      align-items: center;
+      z-index: 1000;
+    }
+
+    .confirm-overlay.active {
+      display: flex;
+    }
+
+    .b21 { font-size: 18px; }
+
+    .confirm-box,
+    .confirm-box button,
+    .confirm-box p,
+    .confirm-box input,
+    .confirm-box select {
+      font-family: 'Segoe UI', sans-serif;
+    }
+
+    .confirm-box {
+      border: 1px solid black;
+      padding: 1rem;
+      width: 340px;
+      max-width: 95vw;
+      background: rgb(232, 232, 232);
+      color: #111827;
+      box-shadow: 4px 4px 0px #555;
+    }
+
+    html.dark .confirm-box {
+      background: #1f2937;
+      color: #f9fafb;
+      border: 1px solid #6b7280;
+      box-shadow: 4px 4px 0px #000;
+    }
+
+    .buttons {
+      display: flex;
+      gap: 0.5rem;
+      margin-top: 0.8rem;
+    }
+
+    .yes {
+      padding: 0.4rem 0.8rem;
+      border: 1px solid black;
+      background: #a50404;
+      color: white;
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 16px;
+    }
+
+    .cancel {
+      padding: 0.4rem 0.8rem;
+      border: 1px solid black;
+      background: #f2f2f2;
+      color: #111;
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 16px;
+    }
+
+    .yes:hover { background: #7d1c1c; }
+    .cancel:hover { background: #d9d9d9; }
+
+    /* Tabular Monospace Timer Display */
+    .timer-display {
+      font-family: 'Courier New', Courier, monospace;
+      font-variant-numeric: tabular-nums;
+      font-feature-settings: "tnum";
+      letter-spacing: -0.02em;
+      display: inline-block;
+      text-align: center;
+      white-space: nowrap;
+    }
+
+    .state-idle { color: currentColor; }
+    .state-holding { color: #dc2626; transform: scale(0.98); }
+    .state-ready { color: #16a34a; transform: scale(1.02); }
+    .state-running { color: #2563eb; }
+    html.dark .state-running { color: #60a5fa; }
+
+    /* Scrollbar styling */
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: #e2e8f0; }
+    html.dark ::-webkit-scrollbar-track { background: #1e293b; }
+    ::-webkit-scrollbar-thumb { background: #94a3b8; }
+    html.dark ::-webkit-scrollbar-thumb { background: #475569; }
+
+    /* Medals styling */
+    .badge-gold { background-color: #fef08a; color: #854d0e; border: 1px solid #ca8a04; }
+    .badge-silver { background-color: #e2e8f0; color: #334155; border: 1px solid #94a3b8; }
+    .badge-bronze { background-color: #ffedd5; color: #9a3412; border: 1px solid #c2410c; }
+    html.dark .badge-gold { background-color: #713f12; color: #fef08a; border-color: #eab308; }
+    html.dark .badge-silver { background-color: #334155; color: #f1f5f9; border-color: #94a3b8; }
+    html.dark .badge-bronze { background-color: #7c2d12; color: #ffedd5; border-color: #ea580c; }
+  </style>
+</head>
+<body class="flex flex-col justify-between min-h-screen">
+
+  <header class="w-full p-4 flex justify-between items-center border-b-2 border-black dark:border-gray-700 bg-white dark:bg-gray-900">
+    <div class="flex items-center space-x-2">
+  <img src="11066913.png" style="height: 30px;">
+      <h1 class="text-xl font-bold tracking-tight">Cube<span class="text-blue-600 dark:text-blue-400">Tick</span></h1>
+    </div>
+
+    <!-- Header Right Buttons -->
+    <div class="flex flex-wrap justify-end items-center gap-2 sm:gap-3">
+      <!-- Quick Stats Pill -->
+      <div class="hidden md:flex items-center gap-4 text-xs font-semibold px-3 py-1.5 border-2 border-black dark:border-gray-600 bg-gray-100 dark:bg-gray-800">
+        <div>PB: <span id="stat-pb-header" class="text-blue-600 dark:text-blue-400 font-bold font-mono">--</span></div>
+        <div>Ao5: <span id="stat-ao5-header" class="text-emerald-600 dark:text-emerald-400 font-bold font-mono">--</span></div>
+      </div>
+
+      <!-- Precision Truncation Button -->
+      <button id="precision-toggle-btn" class="classic-btn px-2.5 py-1.5 text-xs font-mono font-bold" title="Toggle Display Precision">
+        0.001s
+      </button>
+
+      <!-- Theme Toggle -->
+      <button id="theme-toggle-btn" class="classic-btn px-3 py-1.5 text-xs flex items-center gap-1">
+        <span id="theme-icon">🌙</span> <span id="theme-text">Dark</span>
+      </button>
+
+      <!-- History Drawer Toggle -->
+      <button id="open-history-btn" title="View Solves & Stats" class="classic-btn p-1.5 flex items-center justify-center">
+        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+        </svg>
+      </button>
+    </div>
+  </header>
+
+  <main id="timer-area" class="flex-1 flex flex-col justify-between items-center p-6 cursor-pointer text-center select-none">
+    
+    <!-- Scramble Display Box -->
+    <div class="max-w-3xl w-full my-4 p-4 classic-box text-center">
+      <div class="text-xs uppercase tracking-widest text-gray-500 dark:text-gray-400 font-bold mb-1">Standard 3x3 Scramble</div>
+      <div id="scramble-text" class="text-lg sm:text-2xl font-mono font-bold tracking-wide break-words text-gray-800 dark:text-amber-300">
+        Loading...
+      </div>
+    </div>
+
+    <!-- Stopwatch Display Container -->
+    <div class="my-auto py-8 w-full flex flex-col items-center justify-center">
+      <div id="timer-display" class="timer-display state-idle text-6xl sm:text-8xl md:text-9xl font-extrabold tracking-tight">
+        00.000
+      </div>
+      <p id="timer-hint" class="mt-6 text-sm text-gray-500 dark:text-gray-400 font-medium transition-opacity">
+        Press & Hold <kbd class="px-2 py-0.5 border-2 border-black dark:border-gray-600 bg-gray-200 dark:bg-gray-800 text-xs font-mono">SPACE</kbd> / Any Key or Click to start
+      </p>
+    </div>
+
+    <!-- Bottom Quick Stats Row -->
+    <div class="w-full max-w-lg grid grid-cols-4 gap-2 text-center text-xs sm:text-sm classic-box p-3">
+      <div>
+        <div class="text-gray-500 dark:text-gray-400 font-medium">Solves</div>
+        <div id="stat-count" class="font-bold">0</div>
+      </div>
+      <div>
+        <div class="text-gray-500 dark:text-gray-400 font-medium">Best (PB)</div>
+        <div id="stat-pb" class="font-bold text-blue-600 dark:text-blue-400 font-mono">--</div>
+      </div>
+      <div>
+        <div class="text-gray-500 dark:text-gray-400 font-medium">Ao5</div>
+        <div id="stat-ao5" class="font-bold text-emerald-600 dark:text-emerald-400 font-mono">--</div>
+      </div>
+      <div>
+        <div class="text-gray-500 dark:text-gray-400 font-medium">Ao12</div>
+        <div id="stat-ao12" class="font-bold text-purple-600 dark:text-purple-400 font-mono">--</div>
+      </div>
+    </div>
+  </main>
+
+  <div id="history-drawer" class="fixed inset-0 bg-black/40 z-50 transition-opacity opacity-0 pointer-events-none flex justify-end">
+    <div id="history-content" class="w-full max-w-md bg-white dark:bg-gray-900 border-l-2 border-black dark:border-gray-700 h-full flex flex-col transform translate-x-full transition-transform duration-200">
+      
+      <div class="p-4 border-b-2 border-black dark:border-gray-700 flex justify-between items-center bg-gray-100 dark:bg-gray-800">
+        <h2 class="text-lg font-bold">Solve History & Stats</h2>
+        <button id="close-history-btn" class="classic-btn px-2 py-1 text-sm font-bold">✕</button>
+      </div>
+
+      <!-- Stats Summary -->
+      <div class="p-4 border-b-2 border-black dark:border-gray-700 grid grid-cols-2 gap-2 text-xs bg-gray-50 dark:bg-gray-800/50">
+        <div class="classic-box p-2">
+          <span class="text-gray-500 dark:text-gray-400 block">Best Time (PB)</span>
+          <span id="drawer-pb" class="text-sm font-bold text-blue-600 dark:text-blue-400 font-mono">--</span>
+        </div>
+        <div class="classic-box p-2">
+          <span class="text-gray-500 dark:text-gray-400 block">Worst Time</span>
+          <span id="drawer-worst" class="text-sm font-bold text-red-600 dark:text-red-400 font-mono">--</span>
+        </div>
+        <div class="classic-box p-2">
+          <span class="text-gray-500 dark:text-gray-400 block">Current Ao5</span>
+          <span id="drawer-ao5" class="text-sm font-bold text-emerald-600 dark:text-emerald-400 font-mono">--</span>
+        </div>
+        <div class="classic-box p-2">
+          <span class="text-gray-500 dark:text-gray-400 block">Current Ao12</span>
+          <span id="drawer-ao12" class="text-sm font-bold text-purple-600 dark:text-purple-400 font-mono">--</span>
+        </div>
+        <div class="col-span-2 classic-box p-2 flex justify-between items-center">
+          <span class="text-gray-500 dark:text-gray-400">Session Mean:</span>
+          <span id="drawer-mean" class="text-sm font-bold font-mono">--</span>
+        </div>
+      </div>
+
+      <!-- Controls Row (Sort Dropdown & Remove Anomalies) -->
+      <div class="p-3 border-b-2 border-black dark:border-gray-700 bg-gray-200 dark:bg-gray-800 flex flex-wrap items-center justify-between gap-2">
+        <div class="flex items-center gap-1 text-xs">
+          <label for="history-sort-select" class="font-bold text-gray-700 dark:text-gray-300">Sort:</label>
+          <select id="history-sort-select" class="p-1 border border-black dark:border-gray-600 bg-white dark:bg-gray-900 text-xs font-semibold cursor-pointer">
+            <option value="newest">Newest First</option>
+            <option value="oldest">Oldest First</option>
+            <option value="fastest">Fastest First (Ranked)</option>
+            <option value="slowest">Slowest First</option>
+          </select>
+        </div>
+
+        <button id="open-anomalies-btn" class="classic-btn px-2 py-1 text-xs bg-amber-200 text-amber-900 border-amber-900 dark:bg-amber-900/40 dark:text-amber-200">
+          🔍 Filter Anomalies
+        </button>
+      </div>
+
+      <!-- Dynamic History List -->
+      <div id="history-list" class="flex-1 overflow-y-auto p-4 space-y-2">
+        <!-- History items populated dynamically -->
+      </div>
+
+      <div class="p-4 border-t-2 border-black dark:border-gray-700 bg-gray-100 dark:bg-gray-800">
+        <button id="clear-history-btn" class="w-full py-2 classic-btn bg-red-100 text-red-700 border-red-800 hover:bg-red-200 dark:bg-red-900/40 dark:text-red-300 dark:border-red-700">
+          Clear All History
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Anomalies Modal -->
+  <div id="anomalies-modal" class="confirm-overlay">
+    <div class="confirm-box w-[400px] max-w-[95vw]">
+      <div class="flex justify-between items-center mb-2 border-b border-gray-400 pb-1">
+        <h3 class="font-bold text-base">Filter Time Anomalies</h3>
+        <button id="close-anomalies-btn" class="text-xs font-bold px-1.5 py-0.5 border border-black dark:border-gray-500 classic-btn">✕</button>
+      </div>
+
+      <p class="text-xs text-gray-700 dark:text-gray-300 mb-3">
+        Find unintentional fast taps or excessively long solves.
+      </p>
+
+      <div class="grid grid-cols-2 gap-2 text-xs mb-3">
+        <div>
+          <label class="block font-bold mb-1">Min Time (seconds):</label>
+          <input id="anomaly-min-input" type="number" step="0.1" value="0.5" class="w-full p-1.5 border border-black dark:border-gray-600 bg-white dark:bg-gray-800 text-sm font-mono" />
+        </div>
+        <div>
+          <label class="block font-bold mb-1">Max Time (seconds):</label>
+          <input id="anomaly-max-input" type="number" step="1" value="300" class="w-full p-1.5 border border-black dark:border-gray-600 bg-white dark:bg-gray-800 text-sm font-mono" />
+        </div>
+      </div>
+
+      <button id="search-anomalies-btn" class="w-full classic-btn py-1.5 text-xs mb-3 font-bold">
+        Search Anomalies
+      </button>
+
+      <!-- Anomaly Results Container -->
+      <div id="anomalies-list" class="max-h-48 overflow-y-auto border border-gray-400 p-2 space-y-1.5 bg-white dark:bg-gray-900 text-xs">
+        <div class="text-center text-gray-500 py-4">Click search to list outliers</div>
+      </div>
+
+      <div class="buttons mt-3 justify-between">
+        <button id="delete-all-anomalies-btn" class="yes bg-red-700 text-xs opacity-50 cursor-not-allowed" disabled>Delete All Found</button>
+        <button id="cancel-anomalies-btn" class="cancel text-xs">Done</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Confirmation Modal -->
+  <div id="confirm-modal" class="confirm-overlay">
+    <div class="confirm-box">
+      <p id="confirm-message" class="b21 font-bold mb-4">Are you sure?</p>
+      <div class="buttons justify-end">
+        <button id="modal-cancel" class="cancel">Cancel</button>
+        <button id="modal-yes" class="yes">Delete</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let solves = [];
+    let currentScramble = '';
+    let timerState = 'IDLE'; // 'IDLE', 'HOLDING', 'READY', 'RUNNING'
+    let startTime = 0;
+    let animationFrameId = null;
+    let holdTimeout = null;
+    let onConfirmCallback = null;
+
+    // Precision Mode: 0 = 0.001s, 1 = 0.01s, 2 = 0.1s, 3 = 1s
+    const precisions = ['0.001s', '0.01s', '0.1s', '1s'];
+    let precisionIndex = 0;
+    let historySortOrder = 'newest';
+
+    const timerDisplay = document.getElementById('timer-display');
+    const timerHint = document.getElementById('timer-hint');
+    const scrambleText = document.getElementById('scramble-text');
+    const timerArea = document.getElementById('timer-area');
+    
+    const statPbHeader = document.getElementById('stat-pb-header');
+    const statAo5Header = document.getElementById('stat-ao5-header');
+    const statCount = document.getElementById('stat-count');
+    const statPb = document.getElementById('stat-pb');
+    const statAo5 = document.getElementById('stat-ao5');
+    const statAo12 = document.getElementById('stat-ao12');
+
+    const themeToggleBtn = document.getElementById('theme-toggle-btn');
+    const themeIcon = document.getElementById('theme-icon');
+    const themeText = document.getElementById('theme-text');
+    const precisionToggleBtn = document.getElementById('precision-toggle-btn');
+
+    const historyDrawer = document.getElementById('history-drawer');
+    const historyContent = document.getElementById('history-content');
+    const openHistoryBtn = document.getElementById('open-history-btn');
+    const closeHistoryBtn = document.getElementById('close-history-btn');
+    const clearHistoryBtn = document.getElementById('clear-history-btn');
+    const historyList = document.getElementById('history-list');
+    const historySortSelect = document.getElementById('history-sort-select');
+
+    const drawerPb = document.getElementById('drawer-pb');
+    const drawerWorst = document.getElementById('drawer-worst');
+    const drawerAo5 = document.getElementById('drawer-ao5');
+    const drawerAo12 = document.getElementById('drawer-ao12');
+    const drawerMean = document.getElementById('drawer-mean');
+
+    const openAnomaliesBtn = document.getElementById('open-anomalies-btn');
+    const anomaliesModal = document.getElementById('anomalies-modal');
+    const closeAnomaliesBtn = document.getElementById('close-anomalies-btn');
+    const cancelAnomaliesBtn = document.getElementById('cancel-anomalies-btn');
+    const anomalyMinInput = document.getElementById('anomaly-min-input');
+    const anomalyMaxInput = document.getElementById('anomaly-max-input');
+    const searchAnomaliesBtn = document.getElementById('search-anomalies-btn');
+    const anomaliesList = document.getElementById('anomalies-list');
+    const deleteAllAnomaliesBtn = document.getElementById('delete-all-anomalies-btn');
+
+    const confirmModal = document.getElementById('confirm-modal');
+    const confirmMessage = document.getElementById('confirm-message');
+    const modalYes = document.getElementById('modal-yes');
+    const modalCancel = document.getElementById('modal-cancel');
+
+    function initSettings() {
+      // Theme Init
+      const savedTheme = localStorage.getItem('cube_timer_theme') || 'light';
+      if (savedTheme === 'dark') {
+        document.documentElement.classList.add('dark');
+        document.documentElement.classList.remove('light');
+        themeIcon.textContent = '☀️';
+        themeText.textContent = 'Light';
+      } else {
+        document.documentElement.classList.add('light');
+        document.documentElement.classList.remove('dark');
+        themeIcon.textContent = '🌙';
+        themeText.textContent = 'Dark';
+      }
+
+      // Precision Init
+      const savedPrecision = localStorage.getItem('cube_timer_precision');
+      if (savedPrecision !== null) {
+        precisionIndex = parseInt(savedPrecision, 10) || 0;
+      }
+      precisionToggleBtn.textContent = precisions[precisionIndex];
+    }
+
+    themeToggleBtn.addEventListener('click', () => {
+      const isDark = document.documentElement.classList.contains('dark');
+      if (isDark) {
+        document.documentElement.classList.remove('dark');
+        document.documentElement.classList.add('light');
+        localStorage.setItem('cube_timer_theme', 'light');
+        themeIcon.textContent = '🌙';
+        themeText.textContent = 'Dark';
+      } else {
+        document.documentElement.classList.add('dark');
+        document.documentElement.classList.remove('light');
+        localStorage.setItem('cube_timer_theme', 'dark');
+        themeIcon.textContent = '☀️';
+        themeText.textContent = 'Light';
+      }
+    });
+
+    precisionToggleBtn.addEventListener('click', () => {
+      precisionIndex = (precisionIndex + 1) % precisions.length;
+      localStorage.setItem('cube_timer_precision', precisionIndex);
+      precisionToggleBtn.textContent = precisions[precisionIndex];
+      updateUI();
+      if (timerState === 'IDLE') {
+        timerDisplay.textContent = formatTime(0, false);
+      }
+    });
+
+    function formatDateTimeString(dateObj) {
+      const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+      const d = dateObj.getDate();
+      const m = months[dateObj.getMonth()];
+      const y = dateObj.getFullYear();
+      let hours = dateObj.getHours();
+      const mins = String(dateObj.getMinutes()).padStart(2, '0');
+      const ampm = hours >= 12 ? 'PM' : 'AM';
+      hours = hours % 12;
+      hours = hours ? hours : 12; 
+      return `${d}/${m}/${y} ${hours}:${mins} ${ampm}`;
+    }
+
+    const moves = ["R", "L", "U", "D", "F", "B"];
+    const modifiers = ["", "'", "2"];
+
+    function generateScramble() {
+      let scramble = [];
+      let lastAxis = -1;
+      for (let i = 0; i < 20; i++) {
+        let axis;
+        do { axis = Math.floor(Math.random() * 3); } while (axis === lastAxis);
+        lastAxis = axis;
+        let moveIndex = axis * 2 + Math.floor(Math.random() * 2);
+        let move = moves[moveIndex];
+        let mod = modifiers[Math.floor(Math.random() * modifiers.length)];
+        scramble.push(move + mod);
+      }
+      currentScramble = scramble.join(' ');
+      scrambleText.textContent = currentScramble;
+    }
+
+    // Handles precision padding/truncation AND the jitter fix for 0.001s
+    function formatTime(ms, isRunning = false) {
+      if (isNaN(ms) || ms === null) return '--';
+
+      let totalSeconds = Math.floor(ms / 1000);
+      let hours = Math.floor(totalSeconds / 3600);
+      totalSeconds %= 3600;
+      let minutes = Math.floor(totalSeconds / 60);
+      let seconds = totalSeconds % 60;
+      let milliseconds = Math.floor(ms % 1000);
+
+      let msStr = String(milliseconds).padStart(3, '0');
+
+      // Precision Handling
+      if (precisionIndex === 1) { msStr = msStr.substring(0, 2); }      // 0.01s
+      else if (precisionIndex === 2) { msStr = msStr.substring(0, 1); } // 0.1s
+      else if (precisionIndex === 3) { msStr = ''; }                    // 1s
+
+      // JITTER FIX: If running and full precision (0.001s), randomize ONLY the 3rd digit
+      if (isRunning && precisionIndex === 0) {
+        let tenthsAndHundredths = msStr.substring(0, 2);
+        let randomThousandth = Math.floor(Math.random() * 10);
+        msStr = tenthsAndHundredths + randomThousandth;
+      }
+
+      let secStr = String(seconds).padStart(2, '0');
+      let minStr = String(minutes).padStart(2, '0');
+      let hrStr = String(hours).padStart(2, '0');
+
+      let decimalSeparator = msStr.length > 0 ? '.' + msStr : '';
+
+      if (hours > 0) return `${hrStr}:${minStr}:${secStr}${decimalSeparator}`;
+      if (minutes > 0 || hours > 0) return `${minStr}:${secStr}${decimalSeparator}`;
+      return `${secStr}${decimalSeparator}`;
+    }
+
+    function loadSolves() {
+      const stored = localStorage.getItem('cube_timer_solves');
+      if (stored) {
+        try { solves = JSON.parse(stored); } catch (e) { solves = []; }
+      } else { solves = []; }
+      updateUI();
+    }
+
+    function saveSolves() {
+      localStorage.setItem('cube_timer_solves', JSON.stringify(solves));
+      updateUI();
+    }
+
+    function addSolve(timeMs) {
+      const now = new Date();
+      const solve = {
+        id: Date.now(),
+        time: timeMs,
+        scramble: currentScramble,
+        date: formatDateTimeString(now)
+      };
+      solves.unshift(solve); // Add to beginning (newest first)
+      saveSolves();
+      generateScramble();
+    }
+
+    function deleteSolve(id) {
+      solves = solves.filter(s => s.id !== id);
+      saveSolves();
+    }
+
+    function clearAllHistory() {
+      solves = [];
+      saveSolves();
+    }
+
+    function calculateTrimmedAverage(solveList, count) {
+      if (solveList.length < count) return null;
+      let recent = solveList.slice(0, count).map(s => s.time);
+      recent.sort((a, b) => a - b);
+      let trimmed = recent.slice(1, count - 1); // remove best & worst
+      let sum = trimmed.reduce((acc, val) => acc + val, 0);
+      return sum / trimmed.length;
+    }
+
+    function updateUI() {
+      statCount.textContent = solves.length;
+
+      if (solves.length === 0) {
+        statPb.textContent = '--'; statPbHeader.textContent = '--';
+        statAo5.textContent = '--'; statAo5Header.textContent = '--';
+        statAo12.textContent = '--'; drawerPb.textContent = '--';
+        drawerWorst.textContent = '--'; drawerAo5.textContent = '--';
+        drawerAo12.textContent = '--'; drawerMean.textContent = '--';
+        historyList.innerHTML = `<div class="text-center text-gray-500 py-10 text-sm">No solves recorded yet.</div>`;
+        return;
+      }
+
+      const times = solves.map(s => s.time);
+      const pb = Math.min(...times);
+      const worst = Math.max(...times);
+      const sumTotal = times.reduce((a, b) => a + b, 0);
+      const meanTotal = sumTotal / times.length;
+
+      const pbFormatted = formatTime(pb, false);
+      statPb.textContent = pbFormatted; statPbHeader.textContent = pbFormatted; drawerPb.textContent = pbFormatted;
+      drawerWorst.textContent = formatTime(worst, false);
+      drawerMean.textContent = formatTime(meanTotal, false);
+
+      const ao5Val = calculateTrimmedAverage(solves, 5);
+      const ao12Val = calculateTrimmedAverage(solves, 12);
+
+      const ao5Formatted = formatTime(ao5Val, false);
+      const ao12Formatted = formatTime(ao12Val, false);
+
+      statAo5.textContent = ao5Formatted; statAo5Header.textContent = ao5Formatted; drawerAo5.textContent = ao5Formatted;
+      statAo12.textContent = ao12Formatted; drawerAo12.textContent = ao12Formatted;
+
+      renderHistoryList();
+    }
+
+    function renderHistoryList() {
+      historyList.innerHTML = '';
+      if (solves.length === 0) return;
+
+      // 1. Calculate global time rankings
+      const sortedByTimeAsc = [...solves].sort((a, b) => a.time - b.time);
+      const rankMap = new Map();
+      sortedByTimeAsc.forEach((s, index) => {
+        rankMap.set(s.id, index + 1);
+      });
+
+      // 2. Sort display list based on dropdown selection
+      let displayList = [...solves];
+      if (historySortOrder === 'oldest') displayList.reverse();
+      else if (historySortOrder === 'fastest') displayList.sort((a, b) => a.time - b.time);
+      else if (historySortOrder === 'slowest') displayList.sort((a, b) => b.time - a.time);
+
+      // 3. Render HTML
+      displayList.forEach((s) => {
+        const rank = rankMap.get(s.id);
+        let rankBadgeHTML = '';
+        if (rank === 1) rankBadgeHTML = `<span class="badge-gold px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider">#1 🥇</span>`;
+        else if (rank === 2) rankBadgeHTML = `<span class="badge-silver px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider">#2 🥈</span>`;
+        else if (rank === 3) rankBadgeHTML = `<span class="badge-bronze px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider">#3 🥉</span>`;
+        else rankBadgeHTML = `<span class="font-bold text-gray-500 text-xs">#${rank}</span>`;
+
+        const item = document.createElement('div');
+        item.className = 'classic-box p-2.5 flex justify-between items-center text-xs mb-2';
+        item.innerHTML = `
+          <div class="flex flex-col min-w-0 pr-2 gap-1 w-full">
+            <div class="flex items-center justify-between w-full">
+              <div class="flex items-center gap-2">
+                ${rankBadgeHTML}
+                <span class="font-bold text-sm text-blue-700 dark:text-blue-400 font-mono">${formatTime(s.time, false)}</span>
+              </div>
+              <span class="text-[10px] text-gray-500 font-semibold whitespace-nowrap">${s.date}</span>
+            </div>
+            <div class="text-[10px] text-gray-600 dark:text-gray-400 font-mono truncate w-full" title="${s.scramble}">
+              ${s.scramble}
+            </div>
+          </div>
+          <button onclick="confirmSingleDelete(${s.id})" class="classic-btn ml-2 px-2 py-1 text-xs text-red-600 dark:text-red-400" title="Delete Solve">✕</button>
+        `;
+        historyList.appendChild(item);
+      });
+    }
+
+    historySortSelect.addEventListener('change', (e) => {
+      historySortOrder = e.target.value;
+      renderHistoryList();
+    });
+
+    function setTimerState(state) {
+      timerState = state;
+      timerDisplay.className = 'timer-display text-6xl sm:text-8xl md:text-9xl font-extrabold tracking-tight ';
+
+      if (state === 'IDLE') {
+        timerDisplay.classList.add('state-idle');
+        timerHint.textContent = 'Press & Hold SPACE / Any Key or Click to start';
+        timerHint.style.opacity = '1';
+      } else if (state === 'HOLDING') {
+        timerDisplay.classList.add('state-holding');
+        timerHint.textContent = 'Hold until ready...';
+      } else if (state === 'READY') {
+        timerDisplay.classList.add('state-ready');
+        timerHint.textContent = 'Release key to start timing!';
+        timerDisplay.textContent = formatTime(0, false);
+      } else if (state === 'RUNNING') {
+        timerDisplay.classList.add('state-running');
+        timerHint.textContent = 'Press any key or click to stop timer';
+        timerHint.style.opacity = '0.5';
+      }
+    }
+
+    function updateRunningTimer() {
+      if (timerState !== 'RUNNING') return;
+      const elapsed = performance.now() - startTime;
+      timerDisplay.textContent = formatTime(elapsed, true);
+      animationFrameId = requestAnimationFrame(updateRunningTimer);
+    }
+
+    function startTimer() {
+      startTime = performance.now();
+      setTimerState('RUNNING');
+      animationFrameId = requestAnimationFrame(updateRunningTimer);
+    }
+
+    function stopTimer() {
+      if (animationFrameId) {
+        cancelAnimationFrame(animationFrameId);
+        animationFrameId = null;
+      }
+      const elapsed = performance.now() - startTime;
+      timerDisplay.textContent = formatTime(elapsed, false); // locks in exact MS
+      addSolve(elapsed);
+      setTimerState('IDLE');
+    }
+
+    function handleInputStart(e) {
+      // Prevent trigger if inside modals or clicking buttons
+      if (e.target.closest('#history-drawer') || e.target.closest('.confirm-overlay') || e.target.closest('button') || e.target.closest('select')) {
+        return;
+      }
+
+      if (timerState === 'RUNNING') {
+        stopTimer();
+        return;
+      }
+
+      if (timerState === 'IDLE') {
+        setTimerState('HOLDING');
+        holdTimeout = setTimeout(() => {
+          setTimerState('READY');
+        }, 300);
+      }
+    }
+
+    function handleInputEnd(e) {
+      if (e.target.closest('#history-drawer') || e.target.closest('.confirm-overlay') || e.target.closest('button') || e.target.closest('select')) {
+        return;
+      }
+
+      if (timerState === 'HOLDING') {
+        clearTimeout(holdTimeout);
+        setTimerState('IDLE');
+      } else if (timerState === 'READY') {
+        startTimer();
+      }
+    }
+
+    window.addEventListener('keydown', (e) => {
+      if (e.repeat) return;
+      if (confirmModal.classList.contains('active') || anomaliesModal.classList.contains('active')) return;
+      handleInputStart(e);
+    });
+
+    window.addEventListener('keyup', (e) => {
+      if (confirmModal.classList.contains('active') || anomaliesModal.classList.contains('active')) return;
+      handleInputEnd(e);
+    });
+
+    timerArea.addEventListener('pointerdown', (e) => { handleInputStart(e); });
+    timerArea.addEventListener('pointerup', (e) => { handleInputEnd(e); });
+
+    function openDrawer() {
+      historyDrawer.classList.remove('pointer-events-none', 'opacity-0');
+      historyDrawer.classList.add('opacity-100');
+      historyContent.classList.remove('translate-x-full');
+    }
+
+    function closeDrawer() {
+      historyDrawer.classList.add('pointer-events-none', 'opacity-0');
+      historyDrawer.classList.remove('opacity-100');
+      historyContent.classList.add('translate-x-full');
+    }
+
+    openHistoryBtn.addEventListener('click', openDrawer);
+    closeHistoryBtn.addEventListener('click', closeDrawer);
+    historyDrawer.addEventListener('click', (e) => { if (e.target === historyDrawer) closeDrawer(); });
+
+    // Anomalies Tool Logic
+    let currentAnomalies = [];
+    
+    function openAnomaliesModal() { anomaliesModal.classList.add('active'); searchAnomalies(); }
+    function closeAnomaliesModal() { anomaliesModal.classList.remove('active'); }
+
+    function searchAnomalies() {
+      const minSec = parseFloat(anomalyMinInput.value) || 0;
+      const maxSec = parseFloat(anomalyMaxInput.value) || 999999;
+      const minMs = minSec * 1000;
+      const maxMs = maxSec * 1000;
+
+      // Find solves that are LESS than min OR GREATER than max
+      currentAnomalies = solves.filter(s => s.time < minMs || s.time > maxMs);
+      renderAnomaliesList();
+    }
+
+    function renderAnomaliesList() {
+      anomaliesList.innerHTML = '';
+      if (currentAnomalies.length === 0) {
+        anomaliesList.innerHTML = `<div class="text-center text-gray-500 py-4">No anomalies found.</div>`;
+        deleteAllAnomaliesBtn.disabled = true;
+        deleteAllAnomaliesBtn.classList.add('opacity-50', 'cursor-not-allowed');
+        return;
+      }
+
+      deleteAllAnomaliesBtn.disabled = false;
+      deleteAllAnomaliesBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+
+      currentAnomalies.forEach((s) => {
+        const item = document.createElement('div');
+        item.className = 'flex justify-between items-center border-b border-gray-300 dark:border-gray-700 pb-1';
+        item.innerHTML = `
+          <div>
+            <span class="font-bold text-red-600 dark:text-red-400 font-mono">${formatTime(s.time, false)}</span>
+            <span class="text-[10px] text-gray-500 ml-2">${s.date}</span>
+          </div>
+          <button onclick="deleteSingleAnomaly(${s.id})" class="text-xs px-2 py-1 classic-btn bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-200 border-red-800">
+            Delete
+          </button>
+        `;
+        anomaliesList.appendChild(item);
+      });
+    }
+
+    window.deleteSingleAnomaly = function(id) {
+      deleteSolve(id); // Handles state & main UI updates
+      currentAnomalies = currentAnomalies.filter(s => s.id !== id);
+      renderAnomaliesList();
+    };
+
+    deleteAllAnomaliesBtn.addEventListener('click', () => {
+      if (currentAnomalies.length === 0) return;
+      showCustomConfirm(`Delete ${currentAnomalies.length} anomalous solve(s)?`, () => {
+        const anomalyIds = new Set(currentAnomalies.map(s => s.id));
+        solves = solves.filter(s => !anomalyIds.has(s.id));
+        saveSolves();
+        currentAnomalies = [];
+        renderAnomaliesList();
+      });
+    });
+
+    openAnomaliesBtn.addEventListener('click', openAnomaliesModal);
+    closeAnomaliesBtn.addEventListener('click', closeAnomaliesModal);
+    cancelAnomaliesBtn.addEventListener('click', closeAnomaliesModal);
+    searchAnomaliesBtn.addEventListener('click', searchAnomalies);
+
+    // Custom Confirmation Modal System
+    function showCustomConfirm(message, onYes) {
+      confirmMessage.textContent = message;
+      onConfirmCallback = onYes;
+      confirmModal.classList.add('active');
+    }
+
+    function hideCustomConfirm() {
+      confirmModal.classList.remove('active');
+      onConfirmCallback = null;
+    }
+
+    modalYes.addEventListener('click', () => {
+      if (onConfirmCallback) onConfirmCallback();
+      hideCustomConfirm();
+    });
+    modalCancel.addEventListener('click', () => { hideCustomConfirm(); });
+
+    window.confirmSingleDelete = function(id) {
+      showCustomConfirm("Delete this solve?", () => { deleteSolve(id); });
+    };
+
+    clearHistoryBtn.addEventListener('click', () => {
+      if (solves.length === 0) return;
+      showCustomConfirm("Are you sure you want to clear ALL history?", () => { clearAllHistory(); });
+    });
+
+    // Boot
+    window.onload = function() {
+      initSettings();
+      generateScramble();
+      loadSolves();
+      setTimerState('IDLE');
+    };
+  </script>
+</body>
+</html>
